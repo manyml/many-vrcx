@@ -16,7 +16,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-VERSAO = '1.0.0'
+VERSAO = '1.0.1'
 REPO = 'manyml/many-vrcx'
 GRUPO_MANY = 'grp_8e19683f-b1c4-4a07-8bfe-f29c08670e24'
 PASSO_MIN = 15  # gráfico de lotação: um ponto a cada 15 min
@@ -143,9 +143,37 @@ def extrair(caminho):
     return {'ferramenta': 'many-vrcx', 'versao': 1, 'geradoEm': iso(agora), 'grupo': GRUPO_MANY, 'noites': noites}
 
 
+def banco_configurado(pasta):
+    # o VRCX permite guardar o banco em outro lugar (VRCX_DatabaseLocation no VRCX.json)
+    try:
+        with open(os.path.join(pasta, 'VRCX.json'), encoding='utf-8-sig') as f:
+            config = json.load(f)
+    except (OSError, ValueError):
+        return None
+    return next((v for k, v in config.items() if k.lower() == 'vrcx_databaselocation' and v), None)
+
+
 def achar_banco():
-    p = os.environ.get('VRCX_DB') or os.path.join(os.environ.get('APPDATA', ''), 'VRCX', 'VRCX.sqlite3')
-    return p if os.path.exists(p) else None
+    pasta = os.path.join(os.environ.get('APPDATA', ''), 'VRCX')
+    for p in (os.environ.get('VRCX_DB'), banco_configurado(pasta), os.path.join(pasta, 'VRCX.sqlite3')):
+        if p and os.path.exists(p):
+            return p
+    return None
+
+
+def diagnostico(caminho):
+    # quando não há festas: mostra o que tem no banco aberto, para saber se é o banco certo
+    linhas = [f'Banco: {caminho} ({os.path.getsize(caminho) / 1048576:.1f} MB)']
+    try:
+        db = abrir_banco(caminho)
+        n, ini, fim = db.execute('select count(*), min(created_at), max(created_at) from gamelog_location').fetchone()
+        grupos = db.execute("select count(distinct location) from gamelog_location where location like '%group(grp_%'").fetchone()[0]
+        db.close()
+        periodo = f', de {data_br(ini[:10])} a {data_br(fim[:10])}' if n else ''
+        linhas.append(f'Mundos visitados gravados: {n}{periodo}. Instâncias de grupos: {grupos}.')
+    except (sqlite3.Error, TypeError) as e:
+        linhas.append(str(e))
+    return '\n'.join(linhas)
 
 
 def area_de_trabalho():
@@ -296,7 +324,7 @@ def janela():
             tk.Checkbutton(lista, text=texto, variable=v, anchor='w', bg=CARTAO, fg=TEXTO, selectcolor=FUNDO, activebackground=CARTAO, activeforeground=TEXTO,
                            font=('Segoe UI', 10), padx=10, pady=4).pack(fill='x')
         status.config(text=f"{len(dados['noites'])} festa(s) encontrada(s) neste VRCX." if dados['noites']
-                      else 'Não achei festas do grupo Many neste VRCX. Só aparecem as instâncias em que você esteve com o VRCX aberto.')
+                      else 'Não achei festas do grupo Many neste banco. Se o VRCX guarda os dados em outro lugar, clique em "Procurar banco".\n' + diagnostico(estado['banco']))
         contar()
 
     def carregar():

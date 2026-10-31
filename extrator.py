@@ -16,7 +16,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-VERSAO = '1.0.1'
+VERSAO = '1.0.2'
 REPO = 'manyml/many-vrcx'
 GRUPO_MANY = 'grp_8e19683f-b1c4-4a07-8bfe-f29c08670e24'
 PASSO_MIN = 15  # gráfico de lotação: um ponto a cada 15 min
@@ -240,7 +240,7 @@ def caminho_enviadas():
 
 
 def ler_exportadas():
-    # noites que esta pessoa já exportou: voltam desmarcadas para não mandar de novo
+    # noites que esta pessoa já exportou: aparecem com o aviso "já exportada"
     try:
         return set(json.loads(caminho_enviadas().read_text(encoding='utf-8')))
     except (OSError, ValueError):
@@ -317,7 +317,7 @@ def janela():
         estado['dados'], estado['marcas'] = dados, {}
         ja = ler_exportadas()
         for n in reversed(dados['noites']):
-            v = tk.IntVar(value=0 if n['noite'] in ja else 1)
+            v = tk.IntVar(value=0)
             v.trace_add('write', contar)
             estado['marcas'][n['noite']] = v
             texto = f"{data_br(n['noite'])}   {n['mundo']}   ({n['unicos']} pessoas)" + ('   · já exportada' if n['noite'] in ja else '')
